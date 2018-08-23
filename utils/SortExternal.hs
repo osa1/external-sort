@@ -11,7 +11,7 @@ import System.Exit (exitFailure)
 import System.IO
 import Text.Read (readMaybe)
 
-import ExternalSorting
+import ExternalSort
 
 main :: IO ()
 main = do

@@ -1,4 +1,4 @@
-# Revision history for external-sorting
+# Revision history for external-sort
 
 ## 0.1.0.0 -- YYYY-mm-dd
 

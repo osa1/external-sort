@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module ExternalSorting
+module ExternalSort
   ( sortExternal
   , Get
   , Put
