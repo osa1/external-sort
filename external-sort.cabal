@@ -15,8 +15,11 @@ cabal-version:       >=1.10
 library
   exposed-modules:     ExternalSort
   -- other-modules:
+
   build-depends:
     base >=4.11 && <4.12,
+    binary,
+    bytestring,
     filepath
 
   ghc-options: -Wall -O2
@@ -26,13 +29,28 @@ library
 
 executable gen-test-file
   main-is: utils/GenTestFile.hs
-  build-depends: base, random
+  build-depends:
+    base,
+    binary,
+    bytestring,
+    filepath,
+    random
   ghc-options: -Wall
   default-language: Haskell2010
 
 executable sort-external
   main-is: utils/SortExternal.hs
   build-depends: base, external-sort
+  ghc-options: -Wall -O2 -rtsopts
+  default-language: Haskell2010
+
+executable sort-external-binary
+  main-is: utils/SortExternalBinary.hs
+  build-depends:
+    base,
+    binary,
+    bytestring,
+    external-sort
   ghc-options: -Wall -O2 -rtsopts
   default-language: Haskell2010
 

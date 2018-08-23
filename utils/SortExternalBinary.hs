@@ -1,12 +1,12 @@
--- | Sort a file with one integer per line (generate with gen-test-file) using
--- external-sort.
+-- | Sort a binary file of Int list.
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
 module Main where
 
-import Control.Exception (SomeException, catch)
+import qualified Data.Binary as B
+import qualified Data.ByteString as BS
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO
@@ -28,19 +28,21 @@ showUsage = do
     putStrLn "USAGE: sort-external <input> <tmp dir> <chunk size>"
     exitFailure
 
-getInteger :: Get Handle Integer
-getInteger h =
-    ((, h) . readMaybe <$> hGetLine h)
-      `catch` \(_ :: SomeException) -> return (Nothing, h)
+getInteger :: Get BinaryHandle Integer
+getInteger = binaryGet B.get
 
 putInteger :: Put Handle Integer
-putInteger h i = hPutStrLn h (show i)
+putInteger = binaryPut B.put
 
 run :: FilePath -> FilePath -> Int -> IO ()
 run input tmp_dir chunk_size =
-    sortExternal chunk_size tmp_dir input getInteger putInteger
-      (\f -> openFile f ReadMode)
+    sortExternal chunk_size tmp_dir input
+      (binaryGet B.get :: Get BinaryHandle Int)
+      (binaryPut B.put :: Put Handle Int)
+      (\f -> do
+          h <- openFile f ReadMode
+          return (BinaryHandle (Just h) BS.empty 1000))
       (\f -> openFile f WriteMode)
-      hClose
+      (\bh -> mapM_ hClose (_bhHandle bh))
       hClose
       "final"
