@@ -6,7 +6,6 @@
 module Main where
 
 import qualified Data.Binary as B
-import qualified Data.ByteString as BS
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO
@@ -41,7 +40,7 @@ run input tmp_dir chunk_size =
       (binaryPut B.put :: Put Handle Int)
       (\f -> do
           h <- openFile f ReadMode
-          return (BinaryHandle (Just h) BS.empty 1000))
+          return (BinaryHandle (Just h) [] 1000))
       (\f -> openFile f WriteMode)
       (\bh -> mapM_ hClose (_bhHandle bh))
       hClose
