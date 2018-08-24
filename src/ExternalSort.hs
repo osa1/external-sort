@@ -113,39 +113,39 @@ sortExternal chunk_size tmp_dir file_in get put mk_get mk_put close_get close_pu
 -- completely merged, load more elements. If there are no more elements for that
 -- list drop it.
 
-data MergeList get_handle a = MergeList
-    { _mlList   :: [a]
+data Chunk get_handle a = Chunk
+    { _chunkElems  :: [a]
         -- ^ Elements of the list in memory.
-    , _mlHandle :: get_handle
+    , _chunkHandle :: get_handle
         -- ^ Handle to read more elements.
-    , _mlEOF    :: Bool
+    , _chunkEOF    :: Bool
         -- ^ Reached eof?
-    , _mlGet    :: Get get_handle a
+    , _chunkGet    :: Get get_handle a
         -- ^ Use to get more elements.
     }
 
-peekML :: Int -> MergeList get_handle a -> IO (Maybe a, MergeList get_handle a)
-peekML chunk_size (MergeList lst handle eof get)
+peekML :: Int -> Chunk get_handle a -> IO (Maybe a, Chunk get_handle a)
+peekML chunk_size (Chunk lst handle eof get)
   | h : _ <- lst
-  = return (Just h, MergeList lst handle eof get)
+  = return (Just h, Chunk lst handle eof get)
 
   | not eof
   = do (lst', handle', eof') <- readChunk get handle chunk_size
        if null lst'
-         then return (Nothing, MergeList [] handle eof' get)
-         else peekML chunk_size (MergeList lst' handle' eof' get)
+         then return (Nothing, Chunk [] handle eof' get)
+         else peekML chunk_size (Chunk lst' handle' eof' get)
 
   | otherwise
-  = return (Nothing, MergeList [] handle True get)
+  = return (Nothing, Chunk [] handle True get)
 
-unconsML :: MergeList get_handle a -> (a, MergeList get_handle a)
+unconsML :: Chunk get_handle a -> (a, Chunk get_handle a)
 unconsML ml =
-    case _mlList ml of
+    case _chunkElems ml of
       [] -> error "unconsML: Empty list. Make sure you call peekML first."
-      h : t -> (h, ml{ _mlList = t })
+      h : t -> (h, ml{ _chunkElems = t })
 
-consML :: a -> MergeList get_handle a -> MergeList get_handle a
-consML a l = l{ _mlList = a : _mlList l }
+consML :: a -> Chunk get_handle a -> Chunk get_handle a
+consML a l = l{ _chunkElems = a : _chunkElems l }
 
 merge'
     :: forall get_handle put_handle a . Ord a
@@ -162,10 +162,10 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
 
     go chunk_size0 mls
   where
-    mk_ml (get, get_handle) = MergeList [] get_handle False get
+    mk_ml (get, get_handle) = Chunk [] get_handle False get
 
     go :: Int -- ^ Chunk size. Update as lists consumed.
-       -> MV.IOVector (MergeList get_handle a)
+       -> MV.IOVector (Chunk get_handle a)
               -- ^ Lists to merge
        -> IO ()
 
@@ -190,10 +190,10 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
 
     read_mins
       :: Int
-      -> MV.IOVector (MergeList get_handle a)
+      -> MV.IOVector (Chunk get_handle a)
       -> Int
       -> [(Int, a)]
-      -> IO (MV.IOVector (MergeList get_handle a), [(Int, a)])
+      -> IO (MV.IOVector (Chunk get_handle a), [(Int, a)])
 
     read_mins _ v i acc
       | i == MV.length v
@@ -209,7 +209,7 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
         Nothing -> do
           -- Close the handle, move it to the end of the vector, shrink the
           -- vector
-          close_in (_mlHandle l)
+          close_in (_chunkHandle l)
           if (i == MV.length v - 1) then do
             -- Last element
             return (MV.slice 0 (MV.length v - 1) v, acc)
