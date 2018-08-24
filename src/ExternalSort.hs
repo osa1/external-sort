@@ -176,7 +176,7 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
 
       putStrLn ("Looping. Chunk size: " ++ show chunk_size)
 
-      (mls', heads) <- read_heads chunk_size mls 0 []
+      (mls', heads) <- read_mins chunk_size mls 0 []
 
       unless (null heads) $ do
         let (min_idx, min_) = minimumBy (comparing snd) heads
@@ -188,18 +188,18 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
 
         go (max {- (chunk_size0 `div` MV.length mls') -} chunk_size0 1) mls'
 
-    read_heads
+    read_mins
       :: Int
       -> MV.IOVector (MergeList get_handle a)
       -> Int
       -> [(Int, a)]
       -> IO (MV.IOVector (MergeList get_handle a), [(Int, a)])
 
-    read_heads _ v i acc
+    read_mins _ v i acc
       | i == MV.length v
       = return (v, acc)
 
-    read_heads chunk_size v i acc = do
+    read_mins chunk_size v i acc = do
       (mb_a, l) <-
         MV.read v i >>= peekML chunk_size
 
@@ -215,9 +215,9 @@ merge' ins close_in chunk_size0 (put, put_handle) = do
             return (MV.slice 0 (MV.length v - 1) v, acc)
           else do
             MV.swap v i (MV.length v - 1)
-            read_heads chunk_size (MV.slice 0 (MV.length v - 1) v) i acc
+            read_mins chunk_size (MV.slice 0 (MV.length v - 1) v) i acc
         Just a ->
-          read_heads chunk_size v (i + 1) ((i, a) : acc)
+          read_mins chunk_size v (i + 1) ((i, a) : acc)
 
 --------------------------------------------------------------------------------
 
