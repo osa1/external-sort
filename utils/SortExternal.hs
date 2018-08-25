@@ -7,6 +7,7 @@
 module Main where
 
 import Control.Exception (SomeException, catch)
+import Data.Functor (($>))
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO
@@ -28,19 +29,26 @@ showUsage = do
     putStrLn "USAGE: sort-external <input> <tmp dir> <chunk size>"
     exitFailure
 
-getInteger :: Get Handle Integer
-getInteger h =
-    ((, h) . readMaybe <$> hGetLine h)
-      `catch` \(_ :: SomeException) -> return (Nothing, h)
+mkInHandle :: FilePath -> IO (InHandle Integer)
+mkInHandle f = do
+    h0 <- openFile f ReadMode
+    return InHandle
+      { _ihState = h0
+      , _ihGet   = \h ->
+          ((, h) . readMaybe <$> hGetLine h)
+            `catch` \(_ :: SomeException) -> return (Nothing, h)
+      , _ihClose = hClose
+      }
 
-putInteger :: Put Handle Integer
-putInteger h i = hPutStrLn h (show i)
+mkOutHandle :: FilePath -> IO (OutHandle Integer)
+mkOutHandle f = do
+    h0 <- openFile f WriteMode
+    return OutHandle
+      { _ohState = h0
+      , _ohPut   = \h a -> hPutStrLn h (show a) $> h
+      , _ohClose = hClose
+      }
 
 run :: FilePath -> FilePath -> Int -> IO ()
 run input tmp_dir chunk_size =
-    sortExternal chunk_size tmp_dir input getInteger putInteger
-      (\f -> openFile f ReadMode)
-      (\f -> openFile f WriteMode)
-      hClose
-      hClose
-      "final"
+    sortExternal chunk_size tmp_dir input mkInHandle mkOutHandle "final"
