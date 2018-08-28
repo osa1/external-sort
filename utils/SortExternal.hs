@@ -51,4 +51,4 @@ mkOutHandle f = do
 
 run :: FilePath -> FilePath -> Int -> IO ()
 run input tmp_dir chunk_size =
-    sortExternal chunk_size tmp_dir input mkInHandle mkOutHandle "final"
+    sortExternal compare chunk_size tmp_dir input mkInHandle mkOutHandle "final"

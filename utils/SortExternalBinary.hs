@@ -28,7 +28,7 @@ showUsage = do
 
 run :: FilePath -> FilePath -> Int -> IO ()
 run input tmp_dir chunk_size =
-    sortExternal chunk_size tmp_dir input
+    sortExternal compare chunk_size tmp_dir input
       (mkBinaryInHandle (B.get :: B.Get Int))
       (mkBinaryOutHandle B.put)
       "final"

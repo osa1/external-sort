@@ -10,18 +10,18 @@ import qualified Data.Binary.Get as B
 import qualified Data.Binary.Put as B
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.Function (on)
 import Data.Functor (($>))
-import Data.List (minimumBy, sort)
-import Data.Ord (comparing)
+import Data.List (minimumBy, sortBy)
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as MV
 import System.FilePath ((</>))
 import System.IO
 
 data InHandle a = forall state . InHandle
-    { _ihState  :: state
-    , _ihGet    :: state -> IO (Maybe a, state)
-    , _ihClose  :: state -> IO ()
+    { _ihState :: state
+    , _ihGet   :: state -> IO (Maybe a, state)
+    , _ihClose :: state -> IO ()
     }
 
 data OutHandle a = forall state . OutHandle
@@ -103,8 +103,8 @@ mkBinaryOutHandle put f = do
       }
 
 sortExternal
-    :: Ord a
-    => Int      -- ^ How many elements in a chunk?
+    :: (a -> a -> Ordering)
+    -> Int      -- ^ How many elements in a chunk?
     -> FilePath -- ^ Root directory for temporary files
     -> FilePath -- ^ File to sort
     -> (FilePath -> IO (InHandle a)) -- ^ How to open a file for getting
@@ -112,11 +112,11 @@ sortExternal
     -> FilePath -- ^ Where to put the sorted file
     -> IO ()
 
-sortExternal chunk_size tmp_dir file_in mk_get mk_put file_out = do
+sortExternal cmp chunk_size tmp_dir file_in mk_get mk_put file_out = do
     -- Generate sorted chunk files
     n_chunks <- do
       h <- mk_get file_in
-      ret <- generateChunks h chunk_size tmp_dir mk_put
+      ret <- generateChunks cmp h chunk_size tmp_dir mk_put
       ihClose h
       return ret
 
@@ -129,7 +129,7 @@ sortExternal chunk_size tmp_dir file_in mk_get mk_put file_out = do
     hs <- forM [0..n_chunks-1] (\n_chunk -> mk_get (tmp_dir </> show n_chunk))
     h_out <- mk_put file_out
 
-    h_out' <- merge' hs sort_chunk_size h_out
+    h_out' <- merge' cmp hs sort_chunk_size h_out
     ohClose h_out'
 
 --------------------------------------------------------------------------------
@@ -163,20 +163,21 @@ peekML chunk_size (Chunk lst in_h eof)
 unconsML :: Chunk a -> (a, Chunk a)
 unconsML ml =
     case _chunkElems ml of
-      [] -> error "unconsML: Empty list. Make sure you call peekML first."
+      []    -> error "unconsML: Empty list. Make sure you call peekML first."
       h : t -> (h, ml{ _chunkElems = t })
 
 consML :: a -> Chunk a -> Chunk a
 consML a l = l{ _chunkElems = a : _chunkElems l }
 
 merge'
-    :: forall a . Ord a
-    => [InHandle a]
+    :: forall a
+     . (a -> a -> Ordering)
+    -> [InHandle a]
     -> Int -- ^ Chunk size
     -> OutHandle a
     -> IO (OutHandle a)
 
-merge' ins chunk_size0 out_h0 = do
+merge' cmp ins chunk_size0 out_h0 = do
     -- A vector of lists to merge. Consumed lists are replaced with `Nothing`
     -- and moved to the end of the list.
     mls <- V.thaw (V.fromList (map mk_ml ins))
@@ -196,14 +197,14 @@ merge' ins chunk_size0 out_h0 = do
 
     go chunk_size mls out_h = do
 
-      putStrLn ("Looping. Chunk size: " ++ show chunk_size)
+      -- putStrLn ("Looping. Chunk size: " ++ show chunk_size)
 
       (mls', heads) <- read_mins chunk_size mls 0 []
 
       if null heads then
         return out_h
       else do
-        let (min_idx, min_) = minimumBy (comparing snd) heads
+        let (min_idx, min_) = minimumBy (cmp `on` snd) heads
 
         min_l <- MV.read mls min_idx
         MV.write mls min_idx (snd (unconsML min_l))
@@ -247,13 +248,14 @@ merge' ins chunk_size0 out_h0 = do
 
 -- | Split the file into `chunk_size`-sized sorted chunks. Put chunks in the `tmp_dir`.
 generateChunks
-    :: forall a . Ord a
-    => InHandle a -- ^ File to split into chunks
+    :: forall a
+     . (a -> a -> Ordering)
+    -> InHandle a -- ^ File to split into chunks
     -> Int -- ^ Chunk size
     -> FilePath -- ^ Temp dir
     -> (FilePath -> IO (OutHandle a)) -- ^ How to open a file for put
     -> IO Int
-generateChunks h_in0 chunk_size tmp_dir mk_put =
+generateChunks cmp h_in0 chunk_size tmp_dir mk_put =
     go 0 h_in0
   where
     go
@@ -263,7 +265,7 @@ generateChunks h_in0 chunk_size tmp_dir mk_put =
     go n_chunk h_in = do
       (chunk_unsorted, h_in', eof) <- readChunk h_in chunk_size
       h_out <- mk_put (tmp_dir </> show n_chunk)
-      forM_ (sort chunk_unsorted) (ohPut h_out)
+      forM_ (sortBy cmp chunk_unsorted) (ohPut h_out)
       ohClose h_out
       if eof then return n_chunk else go (n_chunk + 1) h_in'
 
